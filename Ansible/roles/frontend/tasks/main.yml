@@ -1,0 +1,92 @@
+---
+# Frontend deployment tasks
+
+- name: Ensure .env file directory exists
+  file:
+    path: '{{ app_home }}/frontend'
+    state: directory
+    mode: '0755'
+
+- name: Create frontend .env file
+  template:
+    src: env.j2
+    dest: '{{ app_home }}/frontend/.env'
+    mode: '0644'
+
+- name: Install global pnpm
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    npm install -g pnpm@latest-10
+  args:
+    executable: /bin/bash
+  become: false
+
+- name: Install frontend dependencies
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    cd {{ app_home }}/frontend
+    pnpm install
+  args:
+    executable: /bin/bash
+  become: false
+  register: pnpm_install
+  ignore_errors: true
+
+- name: Display pnpm install errors if it failed
+  debug:
+    var: pnpm_install
+  when: pnpm_install.failed
+
+- name: Build frontend
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    cd {{ app_home }}/frontend
+    pnpm run build
+  args:
+    executable: /bin/bash
+  become: false
+  register: build_result
+  ignore_errors: true
+
+- name: Display build errors if it failed
+  debug:
+    var: build_result
+  when: build_result.failed
+
+- name: Upload frontend dist/ to S3
+  shell: |
+    cd /home/ubuntu/blog-app/frontend
+    aws s3 sync dist/ s3://sda1029-front-bucket/
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  args:
+    executable: /bin/bash
+  register: upload_result
+  failed_when: upload_result.rc != 0
+
+
+- name: Configure AWS CLI
+  shell: |
+    aws configure set aws_access_key_id {{ aws_access_key }}
+    aws configure set aws_secret_access_key {{ aws_secret_key }}
+    aws configure set region {{ aws_region }}
+    aws configure set output json
+  become: false
+
+- name: Deploy to S3
+  shell: |
+    cd {{ app_home }}/frontend
+    aws s3 sync dist/ s3://{{ frontend_bucket_name }}/
+  args:
+    executable: /bin/bash
+  become: false
+  register: s3_deploy
+
+- name: Display deployment info
+  debug:
+    msg: 'Frontend deployed to S3 bucket: {{ frontend_bucket_name }}, accessible at {{ frontend_bucket_website_endpoint }}'

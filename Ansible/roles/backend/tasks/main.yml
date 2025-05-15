@@ -1,0 +1,171 @@
+---
+- name: Include variables
+  include_vars: main.yml
+
+- name: Check if Node.js is installed
+  shell: command -v node || echo "not installed"
+  register: node_installed
+  changed_when: false
+
+- name: Install NVM
+  shell: |
+    export PROFILE=/home/ubuntu/.bashrc
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+  args:
+    creates: /home/ubuntu/.nvm/nvm.sh
+  when: node_installed.stdout == "not installed"
+  become: false
+
+- name: Install Node.js via NVM
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    nvm install --lts
+    nvm alias default node
+  args:
+    executable: /bin/bash
+  when: node_installed.stdout == "not installed"
+  become: false
+
+- name: Get Node.js version information
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    echo "Node.js version: $(node --version)"
+    echo "npm version: $(npm --version)"
+  args:
+    executable: /bin/bash
+  register: node_version
+  changed_when: false
+  become: false
+
+- name: Display Node.js version
+  debug:
+    var: node_version.stdout_lines
+
+- name: Check if PM2 is installed
+  shell: command -v pm2 || echo "not installed"
+  register: pm2_installed
+  changed_when: false
+
+- name: Install PM2 globally
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    npm install -g pm2
+  args:
+    executable: /bin/bash
+  when: pm2_installed.stdout == "not installed"
+  become: false
+
+- name: Get PM2 version
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    echo "PM2 version: $(pm2 --version)"
+  args:
+    executable: /bin/bash
+  register: pm2_version
+  changed_when: false
+  become: false
+
+- name: Display PM2 version
+  debug:
+    var: pm2_version.stdout_lines
+
+- name: Check if repository directory exists
+  stat:
+    path: '{{ app_home }}'
+  register: app_dir
+
+- name: Remove existing directory if there are local modifications
+  file:
+    path: '{{ app_home }}'
+    state: absent
+  when: app_dir.stat.exists
+
+- name: Clone blog app repository
+  git:
+    repo: https://github.com/cw-barry/blog-app-MERN.git
+    dest: '{{ app_home }}'
+    version: master
+    force: yes
+  register: git_clone_result
+  ignore_errors: true
+
+- name: Try with main branch if master fails
+  git:
+    repo: https://github.com/cw-barry/blog-app-MERN.git
+    dest: '{{ app_home }}'
+    version: main
+    force: yes
+  register: git_clone_main
+  when: git_clone_result.failed
+
+- name: Check repository branches
+  shell: |
+    cd {{ app_home }}
+    git branch -a
+  register: git_branches
+  changed_when: false
+  when: git_clone_result.failed
+
+- name: Display available branches
+  debug:
+    var: git_branches.stdout_lines
+  when: git_clone_result.failed
+
+- name: Create backend logs directory
+  file:
+    path: '{{ app_home }}/backend/logs'
+    state: directory
+    mode: '0755'
+
+- name: Configure backend environment
+  template:
+    src: env.j2
+    dest: '{{ app_home }}/backend/.env'
+    mode: '0600'
+
+- name: Ensure app directory is owned by ubuntu
+  file:
+    path: "{{ app_home }}"
+    state: directory
+    recurse: yes
+    owner: ubuntu
+    group: ubuntu
+
+
+- name: Install backend dependencies
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    cd {{ app_home }}/backend
+    npm install
+  args:
+    executable: /bin/bash
+    creates: '{{ app_home }}/backend/node_modules'
+  register: npm_install
+  ignore_errors: true
+  become: false
+
+- name: Display npm install errors if it failed
+  debug:
+    var: npm_install
+  when: npm_install.failed
+
+- name: Start backend with PM2
+  shell: |
+    export NVM_DIR="/home/ubuntu/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    cd {{ app_home }}/backend
+    pm2 start index.js --name "blog-backend" || pm2 restart blog-backend
+    pm2 save
+  args:
+    executable: /bin/bash
+  register: pm2_start
+  changed_when: pm2_start.rc == 0
+  failed_when: pm2_start.rc != 0
+  become: false
+
+

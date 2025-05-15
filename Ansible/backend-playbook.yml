@@ -1,0 +1,9 @@
+- name: Deploy Blog App (Backend and Frontend)
+  hosts: backend
+  become: false # Default to no sudo
+  become_method: sudo
+  gather_facts: true
+
+  roles:
+    - backend
+    - frontend

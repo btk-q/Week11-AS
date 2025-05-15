@@ -1,0 +1,20 @@
+# This script is used to initialize an EC2 instance with Node.js, PM2, and AWS CLI.
+# It is intended to be used with Terraform to automate the provisioning of the instance.
+app_home: '/home/ubuntu/blog-app'
+app_port: 5000
+app_host: '0.0.0.0'
+app_mode: 'production'
+
+mongodb_uri: mongodb+srv://ec2-aws:4z3fuvV02Zvonaku@cluster0.5oziijp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+aws_access_key: AKIAVSJAHXMJRMYL56OC
+aws_secret_key: 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
+aws_region: eu-north-1
+s3_bucket: sda1029-media-bucket
+media_url: https://sda1029-media-bucket.s3.eu-north-1.amazonaws.com
+frontend_bucket_name: sda1029-front-bucket
+frontend_bucket_website_endpoint: http://sda1029-front-bucket.s3-website.eu-north-1.amazonaws.com
+s3_user_access_key: AKIAVSJAHXMJ7GD7DXZK
+s3_user_secret_key: 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
+
+
+
