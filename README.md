@@ -11,7 +11,7 @@ The application follows a modern cloud architecture with the following component
 - **Database**: MongoDB Atlas (external managed service)
 - **Media Storage**: S3 bucket for uploaded media files
 
-![Architecture Diagram](https://media.example.com/blog-architecture.png)
+![Architecture Diagram](./ScreanShot/graph1.png)
 
 ## Infrastructure Components
 
